@@ -61,6 +61,8 @@ td.lbl{font-weight:500;width:34%}
 td.lbl span{display:block;font-size:11px;color:var(--mute);font-weight:400}
 td input{width:100%;max-width:92px;margin-left:auto;display:block;text-align:right;background:var(--field);border:1px solid var(--line);border-radius:6px;padding:7px 8px;font-variant-numeric:tabular-nums}
 td input:focus{border-color:var(--con);outline:none;box-shadow:0 0 0 2px color-mix(in srgb,var(--con) 30%,transparent)}
+.dl{width:130px;border:1px solid transparent;background:transparent;border-radius:6px;padding:3px 6px;font-size:14px;font-weight:700}
+.dl:hover,.dl:focus{background:var(--card);border-color:var(--line)}
 td.lbl .cp{display:block;margin-top:3px;background:none;border:1px solid var(--line);border-radius:5px;padding:1px 8px;font-size:11px;color:var(--mute);cursor:pointer}
 td.lbl .cp:hover{border-color:var(--con);color:var(--con)}
 td.tot{text-align:right;font-weight:600;font-variant-numeric:tabular-nums;width:90px;padding-right:8px}
@@ -83,6 +85,11 @@ aside h2{margin:0 0 14px;font-size:15px;font-weight:500;color:#aab7c4}
 .note{font-size:12px;color:#8393a4;margin:12px 0 0}
 .leg{display:flex;gap:12px;flex-wrap:wrap;margin-top:16px;font-size:12px;color:#aab7c4}
 .leg i{display:inline-block;width:10px;height:10px;border-radius:2px;margin-right:5px}
+.btn.danger{background:#d33;border-color:#d33;color:#fff;font-weight:600}
+dialog{border:1px solid var(--line);border-radius:12px;background:var(--card);color:var(--ink);padding:22px;width:min(360px,90vw)}
+dialog::backdrop{background:rgba(10,15,21,.55)}
+dialog p{margin:0 0 18px;font-size:15px}
+.dbtn{display:flex;gap:8px;justify-content:flex-end}
 .toast{position:fixed;left:50%;bottom:22px;transform:translateX(-50%);background:#16202b;color:#fff;padding:10px 16px;border-radius:8px;font-size:14px;opacity:0;pointer-events:none;transition:opacity .2s;border:1px solid #3a4756}
 .toast.on{opacity:1}
 @media (max-width:860px){
@@ -126,26 +133,29 @@ aside h2{margin:0 0 14px;font-size:15px;font-weight:500;color:#aab7c4}
     <div class="row"><span>Stand down hrs</span><b id="sStand">0</b></div>
     <div class="row"><span>Total</span><b id="sTotal">0</b></div>
     <div class="row big"><span>Plus 10%</span><b id="sPlus">0</b></div>
-    <p class="note">Work hrs = prep and day total<br>Stand down hrs = stand down and sleeper total</p>
+    <p class="note">Work hrs = prep and work hours total<br>Stand down hrs = stand down and sleeper total</p>
     <div class="leg"><span><i style="background:#f5c400"></i>Outage day</span><span><i style="background:#8a96a3"></i>Non outage</span><span><i style="background:#1f8fd1"></i>Contractor work</span></div>
   </aside>
 </main>
 </div>
 <div class="toast" id="toast"></div>
+<dialog id="dlg" aria-labelledby="dmsg"><p id="dmsg"></p><div class="dbtn"><button class="btn" id="dno">Cancel</button><button class="btn danger" id="dyes">Delete</button></div></dialog>
 
 <script id="saved-data" type="application/json"></script>
 <script>
 const ROWS=[
   {k:'prep',l:'Prep',g:'work'},
   {k:'stand',l:'Stand down',g:'stand'},
-  {k:'day',l:'Day',g:'work'},
+  {k:'day',l:'Work hours',g:'work'},
   {k:'sleep',l:'Sleeper',g:'stand'}
 ];
 const TYPES={outage:'Outage day',non:'Non outage',con:'Contractor work'};
+const MODES={prep:{l:'Prep',rows:['prep']},day:{l:'Day work',rows:['day']},night:{l:'Night work',rows:['stand','day','sleep']}};
+const vis=d=>(MODES[d.mode]||MODES.day).rows.map(k=>ROWS.find(r=>r.k===k));
 const KEY='fshb.v1';
 let uid=1, S={title:'',days:[]};
 
-const blank=()=>({id:uid++,type:'outage',desc:'',rows:{prep:['','',''],stand:['','',''],day:['','',''],sleep:['','','']}});
+const blank=()=>({id:uid++,type:'outage',label:'',mode:'day',desc:'',rows:{prep:['','',''],stand:['','',''],day:['','',''],sleep:['','','']}});
 const n=v=>{const x=parseFloat(v);return isFinite(x)?x:0};
 const rt=r=>(n(r[0])+n(r[1]))*n(r[2]);
 const f=v=>{const r=Math.round(v*100)/100;return r.toLocaleString('en-AU',{maximumFractionDigits:2})};
@@ -153,22 +163,24 @@ const esc=s=>String(s).replace(/[&<>"]/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;',
 
 function fromData(d){
   if(!d||!Array.isArray(d.days)||!d.days.length)throw new Error('bad');
-  const days=d.days.map(x=>{const b=blank();b.type=TYPES[x.type]?x.type:'outage';b.desc=String(x.desc||'');
+  const days=d.days.map(x=>{const b=blank();b.type=TYPES[x.type]?x.type:'outage';b.desc=String(x.desc||'');b.label=String(x.label||'');
+    const rv=k=>x.rows&&x.rows[k]&&x.rows[k].some(v=>n(v)>0);
+    b.mode=MODES[x.mode]?x.mode:(rv('stand')||rv('sleep')?'night':(rv('prep')&&!rv('day')?'prep':'day'));
     ROWS.forEach(r=>{const v=(x.rows&&x.rows[r.k])||[];b.rows[r.k]=[0,1,2].map(i=>v[i]==null?'':String(v[i]))});return b});
   return {title:String(d.title||''),days};
 }
 let EMB=false;
 function load(){
   try{const e=document.getElementById('saved-data').textContent.trim();if(e){S=fromData(JSON.parse(e));EMB=true;return}}catch(e){}
-  try{const d=JSON.parse(localStorage.getItem(KEY));if(d&&d.days){S=d;uid=Math.max(0,...S.days.map(x=>x.id))+1}}catch(e){}
+  try{const d=JSON.parse(localStorage.getItem(KEY));if(d&&d.days){S=fromData(d)}}catch(e){}
   if(!S.days.length)S.days.push(blank());
 }
 function save(){if(EMB)return;try{localStorage.setItem(KEY,JSON.stringify(S))}catch(e){}}
 
 function rowHtml(d,r){
   const v=d.rows[r.k];
-  return `<tr><td class="lbl">${r.l}${r.g==='stand'?`<button class="cp" data-copy="${d.id}" data-key="${r.k}" title="Copy the Day row's TSWS, GSW and hours">Copy day</button>`:''}</td>`+
-    [0,1,2].map(i=>`<td><input type="number" inputmode="decimal" min="0" step="any" aria-label="${r.l} ${['TSWS','GSW','hours'][i]}" data-d="${d.id}" data-k="${r.k}" data-i="${i}" value="${esc(v[i])}"></td>`).join('')+
+  return `<tr><td class="lbl">${r.l}${r.g==='stand'?`<button class="cp" data-copy="${d.id}" data-key="${r.k}" title="Copy the Work hours row's TSW, GSW and hours">Copy work hrs</button>`:''}</td>`+
+    [0,1,2].map(i=>`<td><input type="number" inputmode="decimal" min="0" step="any" aria-label="${r.l} ${['TSW','GSW','hours'][i]}" data-d="${d.id}" data-k="${r.k}" data-i="${i}" value="${esc(v[i])}"></td>`).join('')+
     `<td class="tot" data-t="${d.id}-${r.k}">0</td></tr>`;
 }
 function render(){
@@ -177,7 +189,8 @@ function render(){
   <article class="day" data-type="${d.type}">
     <div class="dh">
       <div>
-        <div class="meta"><b>Day ${ix+1}</b>
+        <div class="meta"><input class="dl" data-label="${d.id}" aria-label="Day name" value="${esc(d.label||'Day '+(ix+1))}" maxlength="40">
+          <select data-mode-for="${d.id}" aria-label="Work type">${Object.entries(MODES).map(([k,m])=>`<option value="${k}" ${k===d.mode?'selected':''}>${m.l}</option>`).join('')}</select>
           <select data-type-for="${d.id}" aria-label="Day type">${Object.entries(TYPES).map(([k,l])=>`<option value="${k}" ${k===d.type?'selected':''}>${l}</option>`).join('')}</select>
         </div>
         <textarea data-desc="${d.id}" rows="2" aria-label="Work description" placeholder="Describe the work for this day">${esc(d.desc)}</textarea>
@@ -185,12 +198,12 @@ function render(){
       <div class="dt"><small>Total day</small><strong data-day="${d.id}">0</strong></div>
     </div>
     <div class="grid"><table>
-      <thead><tr><th>Work</th><th>TSWS</th><th>GSW</th><th>Hrs</th><th>Total</th></tr></thead>
-      <tbody>${ROWS.map(r=>rowHtml(d,r)).join('')}</tbody>
+      <thead><tr><th>Work</th><th>TSW</th><th>GSW</th><th>Hrs</th><th>Total</th></tr></thead>
+      <tbody>${vis(d).map(r=>rowHtml(d,r)).join('')}</tbody>
     </table></div>
     <div class="df">
       <span></span>
-      ${S.days.length>1?`<button class="link del" data-del="${d.id}">Delete day</button>`:'<span></span>'}
+      <button class="link del" data-del="${d.id}">Delete day</button>
     </div>
   </article>`).join('')+`<button class="add" id="addDay">Add another day</button>`;
   calc();
@@ -199,7 +212,7 @@ function calc(){
   let work=0,stand=0;
   S.days.forEach(d=>{
     let day=0;
-    const list=ROWS.map(r=>[r,d.rows[r.k]]);
+    const list=vis(d).map(r=>[r,d.rows[r.k]]);
     list.forEach(([r,v])=>{
       const t=rt(v); day+=t;
       if(r.g==='work')work+=t;else stand+=t;
@@ -211,16 +224,28 @@ function calc(){
   sWork.textContent=f(work);sStand.textContent=f(stand);sTotal.textContent=f(tot);sPlus.textContent=f(tot*1.1);
   return {work,stand,tot,plus:tot*1.1};
 }
+function ask(msg,ok){
+  return new Promise(res=>{
+    const d=document.getElementById('dlg'),y=document.getElementById('dyes'),no=document.getElementById('dno');
+    document.getElementById('dmsg').textContent=msg;y.textContent=ok;
+    const done=v=>{y.onclick=no.onclick=d.oncancel=null;if(d.open)d.close();res(v)};
+    y.onclick=()=>done(true);no.onclick=()=>done(false);d.oncancel=e=>{e.preventDefault();done(false)};
+    try{d.showModal();no.focus()}catch(err){done(window.confirm(msg))}
+  });
+}
 const find=id=>S.days.find(d=>d.id==id);
 const toast=m=>{const t=document.getElementById('toast');t.textContent=m;t.classList.add('on');clearTimeout(toast.h);toast.h=setTimeout(()=>t.classList.remove('on'),1800)};
 
 document.addEventListener('input',e=>{
   const t=e.target;
   if(t.dataset.k){const d=find(t.dataset.d);d.rows[t.dataset.k][t.dataset.i]=t.value;calc();save()}
+  else if(t.dataset.label){find(t.dataset.label).label=t.value;save()}
   else if(t.dataset.desc){find(t.dataset.desc).desc=t.value;save()}
   else if(t.id==='title'){S.title=t.value;save()}
 });
 document.addEventListener('change',e=>{
+  const mid=e.target.dataset.modeFor;
+  if(mid){const d=find(mid);d.mode=e.target.value;if(d.mode==='prep')d.type='non';render();save();return}
   const id=e.target.dataset.typeFor;
   if(id){const d=find(id);d.type=e.target.value;e.target.closest('.day').dataset.type=d.type;save()}
 });
@@ -228,32 +253,39 @@ document.addEventListener('click',e=>{
   const t=e.target, ds=t.dataset;
   if(t.id==='addDay'){S.days.push(blank());render();save()}
   else if(ds.copy){const d=find(ds.copy);d.rows[ds.key]=[...d.rows.day];render();save()}
-  else if(ds.del){if(confirm('Delete this day and its hours?')){S.days=S.days.filter(d=>d.id!=ds.del);render();save()}}
+  else if(ds.del){ask('Delete this day and its hours?','Delete day').then(ok=>{if(!ok)return;S.days=S.days.filter(d=>d.id!=ds.del);if(!S.days.length)S.days.push(blank());render();save()})}
 });
 document.getElementById('print').onclick=()=>window.print();
 document.getElementById('reset').onclick=()=>{
-  if(confirm('Clear the job title and every day? This cannot be undone.')){S={title:'',days:[blank()]};title.value='';render();save()}
+  ask('Clear the job title and every day? This cannot be undone.','Clear all').then(ok=>{if(!ok)return;S={title:'',days:[blank()]};document.getElementById('title').value='';render();save()});
 };
 document.getElementById('copy').onclick=()=>{
   const r=calc();
   let out=(S.title||'Field service breakdown hours')+'\n\n';
   S.days.forEach((d,i)=>{
-    const rows=ROWS.map(x=>[x,d.rows[x.k]]);
-    out+=`Day ${i+1} (${TYPES[d.type]})${d.desc?': '+d.desc:''}\n`;
-    rows.forEach(([x,v])=>{out+=`  ${x.l}: ${n(v[0])} TSWS + ${n(v[1])} GSW x ${n(v[2])} hrs = ${f(rt(v))}\n`});
+    const rows=vis(d).map(x=>[x,d.rows[x.k]]);
+    out+=`${d.label||'Day '+(i+1)} (${MODES[d.mode].l}, ${TYPES[d.type]})${d.desc?': '+d.desc:''}\n`;
+    rows.forEach(([x,v])=>{out+=`  ${x.l}: ${n(v[0])} TSW + ${n(v[1])} GSW x ${n(v[2])} hrs = ${f(rt(v))}\n`});
     out+=`  Total day: ${f(rows.reduce((a,[,v])=>a+rt(v),0))}\n\n`;
   });
   out+=`Work hrs: ${f(r.work)}\nStand down hrs: ${f(r.stand)}\nTotal: ${f(r.tot)}\nPlus 10%: ${f(r.plus)}`;
   (navigator.clipboard?navigator.clipboard.writeText(out):Promise.reject()).then(()=>toast('Summary copied'),()=>toast('Copy not available in this browser'));
 };
 
-document.getElementById('save').onclick=()=>{
+document.getElementById('save').onclick=async()=>{
   const name=((S.title||'field-service-hours').replace(/[\\/:*?"<>|]+/g,'').trim().slice(0,80))||'field-service-hours';
   const c=document.documentElement.cloneNode(true);
   c.querySelector('#saved-data').textContent=JSON.stringify({title:S.title,days:S.days}).replace(/</g,'\\u003c');
   c.querySelector('#days').innerHTML='';
   c.querySelector('#toast').className='toast';
   const blob=new Blob(['<!DOCTYPE html>\n'+c.outerHTML],{type:'text/html'});
+  if(window.showSaveFilePicker){
+    try{
+      const h=await window.showSaveFilePicker({suggestedName:name+'.html',types:[{description:'Field service hours job',accept:{'text/html':['.html']}}]});
+      const w=await h.createWritable();await w.write(blob);await w.close();
+      toast('Saved '+h.name);return;
+    }catch(err){if(err&&err.name==='AbortError')return}
+  }
   const a=document.createElement('a');a.href=URL.createObjectURL(blob);a.download=name+'.html';
   document.body.appendChild(a);a.click();a.remove();setTimeout(()=>URL.revokeObjectURL(a.href),1000);
   toast('Saved '+name+'.html');
