@@ -190,17 +190,17 @@ function render(){
     <div class="dh">
       <div>
         <div class="meta"><input class="dl" data-label="${d.id}" aria-label="Day name" value="${esc(d.label||'Day '+(ix+1))}" maxlength="40">
-          <select data-mode-for="${d.id}" aria-label="Work type">${Object.entries(MODES).map(([k,m])=>`<option value="${k}" ${k===d.mode?'selected':''}>${m.l}</option>`).join('')}</select>
+          ${d.type==='con'?'':`<select data-mode-for="${d.id}" aria-label="Work type">${Object.entries(MODES).map(([k,m])=>`<option value="${k}" ${k===d.mode?'selected':''}>${m.l}</option>`).join('')}</select>`}
           <select data-type-for="${d.id}" aria-label="Day type">${Object.entries(TYPES).map(([k,l])=>`<option value="${k}" ${k===d.type?'selected':''}>${l}</option>`).join('')}</select>
         </div>
-        <textarea data-desc="${d.id}" rows="2" aria-label="Work description" placeholder="Describe the work for this day">${esc(d.desc)}</textarea>
+        <textarea data-desc="${d.id}" rows="2" aria-label="Work description" placeholder="${d.type==='con'?'Describe what the contractor is doing':'Describe the work for this day'}">${esc(d.desc)}</textarea>
       </div>
-      <div class="dt"><small>Total day</small><strong data-day="${d.id}">0</strong></div>
+      ${d.type==='con'?'':`<div class="dt"><small>Total day</small><strong data-day="${d.id}">0</strong></div>`}
     </div>
-    <div class="grid"><table>
+    ${d.type==='con'?'':`<div class="grid"><table>
       <thead><tr><th>Work</th><th>TSW</th><th>GSW</th><th>Hrs</th><th>Total</th></tr></thead>
       <tbody>${vis(d).map(r=>rowHtml(d,r)).join('')}</tbody>
-    </table></div>
+    </table></div>`}
     <div class="df">
       <span></span>
       <button class="link del" data-del="${d.id}">Delete day</button>
@@ -211,6 +211,7 @@ function render(){
 function calc(){
   let work=0,stand=0;
   S.days.forEach(d=>{
+    if(d.type==='con')return;
     let day=0;
     const list=vis(d).map(r=>[r,d.rows[r.k]]);
     list.forEach(([r,v])=>{
@@ -247,7 +248,7 @@ document.addEventListener('change',e=>{
   const mid=e.target.dataset.modeFor;
   if(mid){const d=find(mid);d.mode=e.target.value;if(d.mode==='prep')d.type='non';render();save();return}
   const id=e.target.dataset.typeFor;
-  if(id){const d=find(id);d.type=e.target.value;e.target.closest('.day').dataset.type=d.type;save()}
+  if(id){const d=find(id);d.type=e.target.value;render();save()}
 });
 document.addEventListener('click',e=>{
   const t=e.target, ds=t.dataset;
@@ -263,6 +264,7 @@ document.getElementById('copy').onclick=()=>{
   const r=calc();
   let out=(S.title||'Field service breakdown hours')+'\n\n';
   S.days.forEach((d,i)=>{
+    if(d.type==='con'){out+=`${d.label||'Day '+(i+1)} (${TYPES.con})${d.desc?': '+d.desc:''}\n\n`;return}
     const rows=vis(d).map(x=>[x,d.rows[x.k]]);
     out+=`${d.label||'Day '+(i+1)} (${MODES[d.mode].l}, ${TYPES[d.type]})${d.desc?': '+d.desc:''}\n`;
     rows.forEach(([x,v])=>{out+=`  ${x.l}: ${n(v[0])} TSW + ${n(v[1])} GSW x ${n(v[2])} hrs = ${f(rt(v))}\n`});
