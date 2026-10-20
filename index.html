@@ -1,0 +1,281 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Field Service Hours Breakdown</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Sans:wght@400;500;600;700&display=swap" rel="stylesheet">
+<style>
+:root{
+  --bg:#eef1f4; --card:#fff; --ink:#16202b; --mute:#5d6b7a; --line:#d9dfe6; --field:#f6f8fa;
+  --outage:#f5c400; --outage-soft:#fff8d6;
+  --non:#8a96a3; --non-soft:#eceff2;
+  --con:#1f8fd1; --con-soft:#e1f2fc;
+  --panel:#16202b; --panel-ink:#f3f6f9; --accent:#f5c400;
+  --font:"IBM Plex Sans",system-ui,-apple-system,"Segoe UI",Roboto,Arial,sans-serif;
+}
+@media (prefers-color-scheme:dark){
+  :root{--bg:#0e141b;--card:#18212b;--ink:#e8edf2;--mute:#93a1b0;--line:#2a3643;--field:#111922;
+    --outage-soft:#3a3310;--non-soft:#222c37;--con-soft:#10303f;--panel:#0a0f15;}
+}
+*{box-sizing:border-box}
+html,body{margin:0}
+body{font-family:var(--font);background:var(--bg);color:var(--ink);line-height:1.45;padding:env(safe-area-inset-top) 0 env(safe-area-inset-bottom)}
+button,input,select,textarea{font:inherit;color:inherit}
+:focus-visible{outline:2px solid var(--con);outline-offset:2px}
+header{background:var(--panel);color:var(--panel-ink);border-bottom:4px solid var(--accent)}
+.wrap{max-width:1120px;margin:0 auto;padding:0 20px}
+.top{display:flex;gap:16px;align-items:flex-end;justify-content:space-between;flex-wrap:wrap;padding:22px 20px 20px}
+.top h1{margin:0 0 8px;font-size:15px;font-weight:500;color:#aab7c4}
+.top input{background:transparent;border:0;border-bottom:1px solid #3a4756;color:#fff;font-size:22px;font-weight:600;width:min(640px,100%);padding:4px 0}
+.top input:focus{outline:none;border-color:var(--accent)}
+.actions{display:flex;gap:8px;flex-wrap:wrap}
+.btn{border:1px solid var(--line);background:var(--card);border-radius:8px;padding:8px 14px;cursor:pointer;font-weight:500;font-size:14px}
+.btn:hover{border-color:var(--mute)}
+.btn.dark{background:transparent;color:#e8edf2;border-color:#3a4756}
+.btn.dark:hover{border-color:#8393a4}
+.btn.primary{background:var(--accent);border-color:var(--accent);color:#16202b;font-weight:600}
+main{display:grid;grid-template-columns:1fr 300px;gap:24px;align-items:start;padding:24px 20px 60px}
+.days{display:grid;gap:18px}
+.day{background:var(--card);border:1px solid var(--line);border-radius:12px;overflow:hidden;border-left:8px solid var(--c)}
+.day[data-type=outage]{--c:var(--outage);--s:var(--outage-soft)}
+.day[data-type=non]{--c:var(--non);--s:var(--non-soft)}
+.day[data-type=con]{--c:var(--con);--s:var(--con-soft)}
+.dh{display:grid;grid-template-columns:1fr auto;gap:12px;padding:14px 16px;background:var(--s)}
+.dh textarea{width:100%;resize:vertical;min-height:44px;border:1px solid transparent;background:transparent;border-radius:6px;padding:6px 8px;font-weight:600;font-size:15px}
+.dh textarea:hover,.dh textarea:focus{background:var(--card);border-color:var(--line)}
+.meta{display:flex;gap:8px;align-items:center;margin-bottom:4px;flex-wrap:wrap}
+.meta b{font-size:13px;color:var(--mute);font-weight:600}
+.meta select{border:1px solid var(--line);background:var(--card);border-radius:6px;padding:4px 8px;font-size:13px}
+.dt{text-align:right}
+.dt small{display:block;color:var(--mute);font-size:12px}
+.dt strong{font-size:30px;font-weight:700;font-variant-numeric:tabular-nums;line-height:1.1}
+.grid{padding:6px 16px 14px;overflow-x:auto}
+table{width:100%;border-collapse:collapse;min-width:430px}
+th{font-size:12px;color:var(--mute);font-weight:600;text-align:right;padding:8px 6px}
+th:first-child,td:first-child{text-align:left}
+td{padding:4px 6px;border-top:1px solid var(--line)}
+td.lbl{font-weight:500;width:34%}
+td.lbl span{display:block;font-size:11px;color:var(--mute);font-weight:400}
+td input{width:100%;max-width:92px;margin-left:auto;display:block;text-align:right;background:var(--field);border:1px solid var(--line);border-radius:6px;padding:7px 8px;font-variant-numeric:tabular-nums}
+td input:focus{border-color:var(--con);outline:none;box-shadow:0 0 0 2px color-mix(in srgb,var(--con) 30%,transparent)}
+td.lbl .cp{display:block;margin-top:3px;background:none;border:1px solid var(--line);border-radius:5px;padding:1px 8px;font-size:11px;color:var(--mute);cursor:pointer}
+td.lbl .cp:hover{border-color:var(--con);color:var(--con)}
+td.tot{text-align:right;font-weight:600;font-variant-numeric:tabular-nums;width:90px;padding-right:8px}
+tr.ot td.lbl{color:#b45309}
+@media (prefers-color-scheme:dark){tr.ot td.lbl{color:#f0a64a}}
+.df{display:flex;gap:8px;justify-content:space-between;padding:0 16px 14px;flex-wrap:wrap}
+.link{background:none;border:0;color:var(--mute);cursor:pointer;font-size:13px;padding:4px 2px;text-decoration:underline}
+.link:hover{color:var(--ink)}
+.link.del:hover{color:#d33}
+.add{border:2px dashed var(--line);background:transparent;border-radius:12px;padding:16px;cursor:pointer;font-weight:600;color:var(--mute);width:100%}
+.add:hover{border-color:var(--mute);color:var(--ink)}
+aside{position:sticky;top:16px;background:var(--panel);color:var(--panel-ink);border-radius:14px;padding:20px}
+aside h2{margin:0 0 14px;font-size:15px;font-weight:500;color:#aab7c4}
+.row{display:flex;justify-content:space-between;align-items:baseline;padding:10px 0;border-bottom:1px solid #2b3744;font-variant-numeric:tabular-nums}
+.row span{color:#c4cfda;font-size:14px}
+.row b{font-size:18px;font-weight:600}
+.big{padding-top:18px}
+.big span{color:var(--accent);font-weight:600}
+.big b{font-size:40px;font-weight:700;color:#fff;line-height:1}
+.note{font-size:12px;color:#8393a4;margin:12px 0 0}
+.leg{display:flex;gap:12px;flex-wrap:wrap;margin-top:16px;font-size:12px;color:#aab7c4}
+.leg i{display:inline-block;width:10px;height:10px;border-radius:2px;margin-right:5px}
+.toast{position:fixed;left:50%;bottom:22px;transform:translateX(-50%);background:#16202b;color:#fff;padding:10px 16px;border-radius:8px;font-size:14px;opacity:0;pointer-events:none;transition:opacity .2s;border:1px solid #3a4756}
+.toast.on{opacity:1}
+@media (max-width:860px){
+  main{grid-template-columns:1fr}
+  aside{position:static;order:-1}
+}
+@media print{
+  header .actions,.add,.df,.toast{display:none}
+  body{background:#fff;color:#000}
+  main{grid-template-columns:1fr}
+  aside{position:static;background:#fff;color:#000;border:1px solid #999}
+  aside *{color:#000!important}
+  .day{break-inside:avoid}
+}
+</style>
+</head>
+<body>
+<header>
+  <div class="wrap top">
+    <div style="flex:1;min-width:260px">
+      <h1>Field service breakdown hours</h1>
+      <input id="title" aria-label="Job title and reference" placeholder="Job title, address and reference numbers">
+    </div>
+    <div class="actions">
+      <button class="btn primary" id="save">Save to file</button>
+      <button class="btn dark" id="open">Open file</button>
+      <input type="file" id="file" accept=".html,.htm,.fshb,.json" hidden>
+      <button class="btn dark" id="copy">Copy summary</button>
+      <button class="btn dark" id="print">Print</button>
+      <button class="btn dark" id="reset">Clear all</button>
+    </div>
+  </div>
+</header>
+
+<div class="wrap">
+<main>
+  <section class="days" id="days" aria-label="Work days"></section>
+  <aside aria-label="Totals">
+    <h2>Job totals</h2>
+    <div class="row"><span>Work hrs</span><b id="sWork">0</b></div>
+    <div class="row"><span>Stand down hrs</span><b id="sStand">0</b></div>
+    <div class="row"><span>Total</span><b id="sTotal">0</b></div>
+    <div class="row big"><span>Plus 10%</span><b id="sPlus">0</b></div>
+    <p class="note">Work hrs = prep and day total<br>Stand down hrs = stand down and sleeper total</p>
+    <div class="leg"><span><i style="background:#f5c400"></i>Outage day</span><span><i style="background:#8a96a3"></i>Non outage</span><span><i style="background:#1f8fd1"></i>Contractor work</span></div>
+  </aside>
+</main>
+</div>
+<div class="toast" id="toast"></div>
+
+<script id="saved-data" type="application/json"></script>
+<script>
+const ROWS=[
+  {k:'prep',l:'Prep',g:'work'},
+  {k:'stand',l:'Stand down',g:'stand'},
+  {k:'day',l:'Day',g:'work'},
+  {k:'sleep',l:'Sleeper',g:'stand'}
+];
+const TYPES={outage:'Outage day',non:'Non outage',con:'Contractor work'};
+const KEY='fshb.v1';
+let uid=1, S={title:'',days:[]};
+
+const blank=()=>({id:uid++,type:'outage',desc:'',rows:{prep:['','',''],stand:['','',''],day:['','',''],sleep:['','','']}});
+const n=v=>{const x=parseFloat(v);return isFinite(x)?x:0};
+const rt=r=>(n(r[0])+n(r[1]))*n(r[2]);
+const f=v=>{const r=Math.round(v*100)/100;return r.toLocaleString('en-AU',{maximumFractionDigits:2})};
+const esc=s=>String(s).replace(/[&<>"]/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]));
+
+function fromData(d){
+  if(!d||!Array.isArray(d.days)||!d.days.length)throw new Error('bad');
+  const days=d.days.map(x=>{const b=blank();b.type=TYPES[x.type]?x.type:'outage';b.desc=String(x.desc||'');
+    ROWS.forEach(r=>{const v=(x.rows&&x.rows[r.k])||[];b.rows[r.k]=[0,1,2].map(i=>v[i]==null?'':String(v[i]))});return b});
+  return {title:String(d.title||''),days};
+}
+let EMB=false;
+function load(){
+  try{const e=document.getElementById('saved-data').textContent.trim();if(e){S=fromData(JSON.parse(e));EMB=true;return}}catch(e){}
+  try{const d=JSON.parse(localStorage.getItem(KEY));if(d&&d.days){S=d;uid=Math.max(0,...S.days.map(x=>x.id))+1}}catch(e){}
+  if(!S.days.length)S.days.push(blank());
+}
+function save(){if(EMB)return;try{localStorage.setItem(KEY,JSON.stringify(S))}catch(e){}}
+
+function rowHtml(d,r){
+  const v=d.rows[r.k];
+  return `<tr><td class="lbl">${r.l}${r.g==='stand'?`<button class="cp" data-copy="${d.id}" data-key="${r.k}" title="Copy the Day row's TSWS, GSW and hours">Copy day</button>`:''}</td>`+
+    [0,1,2].map(i=>`<td><input type="number" inputmode="decimal" min="0" step="any" aria-label="${r.l} ${['TSWS','GSW','hours'][i]}" data-d="${d.id}" data-k="${r.k}" data-i="${i}" value="${esc(v[i])}"></td>`).join('')+
+    `<td class="tot" data-t="${d.id}-${r.k}">0</td></tr>`;
+}
+function render(){
+  const el=document.getElementById('days');
+  el.innerHTML=S.days.map((d,ix)=>`
+  <article class="day" data-type="${d.type}">
+    <div class="dh">
+      <div>
+        <div class="meta"><b>Day ${ix+1}</b>
+          <select data-type-for="${d.id}" aria-label="Day type">${Object.entries(TYPES).map(([k,l])=>`<option value="${k}" ${k===d.type?'selected':''}>${l}</option>`).join('')}</select>
+        </div>
+        <textarea data-desc="${d.id}" rows="2" aria-label="Work description" placeholder="Describe the work for this day">${esc(d.desc)}</textarea>
+      </div>
+      <div class="dt"><small>Total day</small><strong data-day="${d.id}">0</strong></div>
+    </div>
+    <div class="grid"><table>
+      <thead><tr><th>Work</th><th>TSWS</th><th>GSW</th><th>Hrs</th><th>Total</th></tr></thead>
+      <tbody>${ROWS.map(r=>rowHtml(d,r)).join('')}</tbody>
+    </table></div>
+    <div class="df">
+      <span></span>
+      ${S.days.length>1?`<button class="link del" data-del="${d.id}">Delete day</button>`:'<span></span>'}
+    </div>
+  </article>`).join('')+`<button class="add" id="addDay">Add another day</button>`;
+  calc();
+}
+function calc(){
+  let work=0,stand=0;
+  S.days.forEach(d=>{
+    let day=0;
+    const list=ROWS.map(r=>[r,d.rows[r.k]]);
+    list.forEach(([r,v])=>{
+      const t=rt(v); day+=t;
+      if(r.g==='work')work+=t;else stand+=t;
+      const c=document.querySelector(`[data-t="${d.id}-${r.k}"]`); if(c)c.textContent=f(t);
+    });
+    const dc=document.querySelector(`[data-day="${d.id}"]`); if(dc)dc.textContent=f(day);
+  });
+  const tot=work+stand;
+  sWork.textContent=f(work);sStand.textContent=f(stand);sTotal.textContent=f(tot);sPlus.textContent=f(tot*1.1);
+  return {work,stand,tot,plus:tot*1.1};
+}
+const find=id=>S.days.find(d=>d.id==id);
+const toast=m=>{const t=document.getElementById('toast');t.textContent=m;t.classList.add('on');clearTimeout(toast.h);toast.h=setTimeout(()=>t.classList.remove('on'),1800)};
+
+document.addEventListener('input',e=>{
+  const t=e.target;
+  if(t.dataset.k){const d=find(t.dataset.d);d.rows[t.dataset.k][t.dataset.i]=t.value;calc();save()}
+  else if(t.dataset.desc){find(t.dataset.desc).desc=t.value;save()}
+  else if(t.id==='title'){S.title=t.value;save()}
+});
+document.addEventListener('change',e=>{
+  const id=e.target.dataset.typeFor;
+  if(id){const d=find(id);d.type=e.target.value;e.target.closest('.day').dataset.type=d.type;save()}
+});
+document.addEventListener('click',e=>{
+  const t=e.target, ds=t.dataset;
+  if(t.id==='addDay'){S.days.push(blank());render();save()}
+  else if(ds.copy){const d=find(ds.copy);d.rows[ds.key]=[...d.rows.day];render();save()}
+  else if(ds.del){if(confirm('Delete this day and its hours?')){S.days=S.days.filter(d=>d.id!=ds.del);render();save()}}
+});
+document.getElementById('print').onclick=()=>window.print();
+document.getElementById('reset').onclick=()=>{
+  if(confirm('Clear the job title and every day? This cannot be undone.')){S={title:'',days:[blank()]};title.value='';render();save()}
+};
+document.getElementById('copy').onclick=()=>{
+  const r=calc();
+  let out=(S.title||'Field service breakdown hours')+'\n\n';
+  S.days.forEach((d,i)=>{
+    const rows=ROWS.map(x=>[x,d.rows[x.k]]);
+    out+=`Day ${i+1} (${TYPES[d.type]})${d.desc?': '+d.desc:''}\n`;
+    rows.forEach(([x,v])=>{out+=`  ${x.l}: ${n(v[0])} TSWS + ${n(v[1])} GSW x ${n(v[2])} hrs = ${f(rt(v))}\n`});
+    out+=`  Total day: ${f(rows.reduce((a,[,v])=>a+rt(v),0))}\n\n`;
+  });
+  out+=`Work hrs: ${f(r.work)}\nStand down hrs: ${f(r.stand)}\nTotal: ${f(r.tot)}\nPlus 10%: ${f(r.plus)}`;
+  (navigator.clipboard?navigator.clipboard.writeText(out):Promise.reject()).then(()=>toast('Summary copied'),()=>toast('Copy not available in this browser'));
+};
+
+document.getElementById('save').onclick=()=>{
+  const name=((S.title||'field-service-hours').replace(/[\\/:*?"<>|]+/g,'').trim().slice(0,80))||'field-service-hours';
+  const c=document.documentElement.cloneNode(true);
+  c.querySelector('#saved-data').textContent=JSON.stringify({title:S.title,days:S.days}).replace(/</g,'\\u003c');
+  c.querySelector('#days').innerHTML='';
+  c.querySelector('#toast').className='toast';
+  const blob=new Blob(['<!DOCTYPE html>\n'+c.outerHTML],{type:'text/html'});
+  const a=document.createElement('a');a.href=URL.createObjectURL(blob);a.download=name+'.html';
+  document.body.appendChild(a);a.click();a.remove();setTimeout(()=>URL.revokeObjectURL(a.href),1000);
+  toast('Saved '+name+'.html');
+};
+document.getElementById('open').onclick=()=>document.getElementById('file').click();
+document.getElementById('file').onchange=e=>{
+  const fl=e.target.files[0];e.target.value='';if(!fl)return;
+  const rd=new FileReader();
+  rd.onload=()=>{
+    try{
+      let txt=rd.result;
+      if(/\.html?$/i.test(fl.name))txt=new DOMParser().parseFromString(txt,'text/html').getElementById('saved-data').textContent;
+      S=fromData(JSON.parse(txt));
+      document.getElementById('title').value=S.title;render();save();toast('Opened '+fl.name);
+    }catch(err){toast('That file could not be opened. Choose a job saved from this app.')}
+  };
+  rd.readAsText(fl);
+};
+
+load();
+document.getElementById('title').value=S.title||'';
+render();
+</script>
+</body>
+</html>
