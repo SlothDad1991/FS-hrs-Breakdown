@@ -111,7 +111,7 @@ dialog p{margin:0 0 18px;font-size:15px}
   <div class="wrap top">
     <div style="flex:1;min-width:260px">
       <h1>Field service breakdown hours</h1>
-      <input id="title" aria-label="Job title and reference" placeholder="Job title, address and reference numbers">
+      <input id="title" autocomplete="off" aria-label="Job title and reference" placeholder="Job title, address and reference numbers">
     </div>
     <div class="actions">
       <button class="btn primary" id="save">Save to file</button>
@@ -275,7 +275,8 @@ document.getElementById('copy').onclick=()=>{
 };
 
 document.getElementById('save').onclick=async()=>{
-  const name=((S.title||'field-service-hours').replace(/[\\/:*?"<>|]+/g,'').trim().slice(0,80))||'field-service-hours';
+  S.title=document.getElementById('title').value.trim();
+  const name=S.title.replace(/[\\/:*?"<>|\u0000-\u001f]+/g,' ').replace(/\s+/g,' ').replace(/^[.\s]+|[.\s]+$/g,'').slice(0,100)||'field-service-hours';
   const c=document.documentElement.cloneNode(true);
   c.querySelector('#saved-data').textContent=JSON.stringify({title:S.title,days:S.days}).replace(/</g,'\\u003c');
   c.querySelector('#days').innerHTML='';
