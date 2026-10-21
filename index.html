@@ -74,7 +74,15 @@ tr.ot td.lbl{color:#b45309}
 .link.del:hover{color:#d33}
 .add{border:2px dashed var(--line);background:transparent;border-radius:12px;padding:16px;cursor:pointer;font-weight:600;color:var(--mute);width:100%}
 .add:hover{border-color:var(--mute);color:var(--ink)}
-aside{position:sticky;top:16px;background:var(--panel);color:var(--panel-ink);border-radius:14px;padding:20px}
+aside{background:var(--panel);color:var(--panel-ink);border-radius:14px;padding:20px}
+.side{position:sticky;top:16px}
+.info{background:var(--panel);color:var(--panel-ink);border-radius:14px;padding:18px 20px;margin-top:16px}
+.info .ih{display:flex;justify-content:space-between;align-items:baseline;margin-bottom:6px}
+.info h2{margin:0;font-size:15px;font-weight:500;color:#aab7c4}
+.info .link{color:#8393a4}.info .link:hover{color:#fff}
+.info label{display:block;font-size:12px;color:#8393a4;margin:12px 0 4px}
+.info input{width:100%;background:#0e151d;border:1px solid #2b3744;color:#fff;border-radius:8px;padding:8px 10px;color-scheme:dark}
+.info input:focus{border-color:var(--accent);outline:none}
 aside h2{margin:0 0 14px;font-size:15px;font-weight:500;color:#aab7c4}
 .row{display:flex;justify-content:space-between;align-items:baseline;padding:10px 0;border-bottom:1px solid #2b3744;font-variant-numeric:tabular-nums}
 .row span{color:#c4cfda;font-size:14px}
@@ -95,7 +103,7 @@ dialog p{margin:0 0 18px;font-size:15px}
 .toast.on{opacity:1}
 @media (max-width:860px){
   main{grid-template-columns:1fr}
-  aside{position:static;order:-1}
+  .side{position:static;order:-1}
 }
 @media print{
   :root{--bg:#fff;--card:#fff;--ink:#000;--mute:#444;--line:#bbb;--field:#fff;--outage-soft:#fff8d6;--non-soft:#eceff2;--con-soft:#e1f2fc}
@@ -106,7 +114,11 @@ dialog p{margin:0 0 18px;font-size:15px}
   header .actions,.add,.df,.toast{display:none}
   body{background:#fff;color:#000}
   main{grid-template-columns:1fr}
-  aside{position:static;background:#fff;color:#000;border:1px solid #999}
+  .side{position:static}
+  aside,.info{background:#fff;color:#000;border:1px solid #999}
+  .info *{color:#000!important}
+  .info input{background:#fff;border:0;padding-left:0}
+  .info .link{display:none}
   aside *{color:#000!important}
   .day{break-inside:avoid}
 }
@@ -135,6 +147,7 @@ dialog p{margin:0 0 18px;font-size:15px}
 <div class="wrap">
 <main>
   <section class="days" id="days" aria-label="Work days"></section>
+  <div class="side">
   <aside aria-label="Totals">
     <h2>Job totals</h2>
     <div class="row"><span>Work hrs</span><b id="sWork">0</b></div>
@@ -144,6 +157,14 @@ dialog p{margin:0 0 18px;font-size:15px}
     <p class="note">Work hrs = prep and work hours total<br>Stand down hrs = stand down and sleeper total</p>
     <div class="leg"><span><i style="background:#f5c400"></i>Outage day</span><span><i style="background:#8a96a3"></i>Non outage</span><span><i style="background:#1f8fd1"></i>Contractor work</span></div>
   </aside>
+  <section class="info" aria-label="Prepared by">
+    <div class="ih"><h2>Prepared by</h2><button class="link" id="infoClear">Clear all</button></div>
+    <label for="iname">Name</label>
+    <input id="iname" autocomplete="name" maxlength="80" placeholder="Your name">
+    <label for="idate">Date</label>
+    <input id="idate" type="date">
+  </section>
+  </div>
 </main>
 </div>
 <div class="toast" id="toast"></div>
@@ -177,10 +198,17 @@ function fromData(d){
     ROWS.forEach(r=>{const v=(x.rows&&x.rows[r.k])||[];b.rows[r.k]=[0,1,2].map(i=>v[i]==null?'':String(v[i]))});return b});
   return {title:String(d.title||''),days};
 }
+const todayStr=()=>{const d=new Date();return d.getFullYear()+'-'+String(d.getMonth()+1).padStart(2,'0')+'-'+String(d.getDate()).padStart(2,'0')};
+let INFO={name:'',date:'',manual:false},INFO_SET=false;
+const IKEY='fshb.info';
+function setInfo(d){INFO={name:String(d.name||'').slice(0,80),date:/^\d{4}-\d\d-\d\d$/.test(d.date||'')?d.date:'',manual:!!d.manual};INFO_SET=true}
+function saveInfo(){try{localStorage.setItem(IKEY,JSON.stringify(INFO))}catch(e){}}
+function loadInfo(){try{const d=JSON.parse(localStorage.getItem(IKEY));if(d)setInfo(d)}catch(e){}if(!INFO.manual||!INFO.date)INFO.date=todayStr();INFO_SET=true}
+function showInfo(){document.getElementById('iname').value=INFO.name;document.getElementById('idate').value=INFO.date}
 let EMB=false,DIRTY=false;
 function setDirty(v){DIRTY=v;const e=document.getElementById('dirty');if(e)e.hidden=!v}
 function load(){
-  try{const e=document.getElementById('saved-data').textContent.trim();if(e){S=fromData(JSON.parse(e));EMB=true;return}}catch(e){}
+  try{const e=document.getElementById('saved-data').textContent.trim();if(e){const d=JSON.parse(e);S=fromData(d);EMB=true;if(d.info)setInfo(d.info);return}}catch(e){}
   try{const d=JSON.parse(localStorage.getItem(KEY));if(d&&d.days){S=fromData(d)}}catch(e){}
   if(!S.days.length)S.days.push(blank());
 }
@@ -252,6 +280,8 @@ document.addEventListener('input',e=>{
   else if(t.dataset.label){find(t.dataset.label).label=t.value;save()}
   else if(t.dataset.desc){find(t.dataset.desc).desc=t.value;save()}
   else if(t.id==='title'){S.title=t.value;save()}
+  else if(t.id==='iname'){INFO.name=t.value;saveInfo();setDirty(true)}
+  else if(t.id==='idate'){INFO.date=t.value;INFO.manual=!!t.value;saveInfo();setDirty(true)}
 });
 document.addEventListener('change',e=>{
   const mid=e.target.dataset.modeFor;
@@ -284,10 +314,11 @@ function doPrint(tip){
   if(tip)toast("In the print window, set the printer to 'Save as PDF'");
   setTimeout(()=>window.print(),tip?800:0);
 }
+document.getElementById('infoClear').onclick=()=>{INFO={name:'',date:todayStr(),manual:false};saveInfo();showInfo();setDirty(true)};
 document.getElementById('print').onclick=()=>doPrint(false);
 document.getElementById('pdf').onclick=()=>doPrint(true);
 document.getElementById('reset').onclick=()=>{
-  ask('Clear the job title and every day? This cannot be undone.','Clear all').then(ok=>{if(!ok)return;S={title:'',days:[blank()]};document.getElementById('title').value='';render();save()});
+  ask('Clear the job title and every day? Your name and date are kept. This cannot be undone.','Clear all').then(ok=>{if(!ok)return;S={title:'',days:[blank()]};document.getElementById('title').value='';render();save()});
 };
 document.getElementById('copy').onclick=()=>{
   const r=calc();
@@ -300,6 +331,7 @@ document.getElementById('copy').onclick=()=>{
     out+=`  Total day: ${f(rows.reduce((a,[,v])=>a+rt(v),0))}\n\n`;
   });
   out+=`Work hrs: ${f(r.work)}\nStand down hrs: ${f(r.stand)}\nTotal: ${f(r.tot)}\nPlus 10%: ${f(r.plus)}`;
+  if(INFO.name||INFO.date)out+=`\n\nPrepared by: ${INFO.name}${INFO.date?'  Date: '+INFO.date.split('-').reverse().join('/'):''}`;
   (navigator.clipboard?navigator.clipboard.writeText(out):Promise.reject()).then(()=>toast('Summary copied'),()=>toast('Copy not available in this browser'));
 };
 
@@ -307,7 +339,7 @@ document.getElementById('save').onclick=async()=>{
   S.title=document.getElementById('title').value.trim();
   const name=S.title.replace(/[\\/:*?"<>|\u0000-\u001f]+/g,' ').replace(/\s+/g,' ').replace(/^[.\s]+|[.\s]+$/g,'').slice(0,100)||'field-service-hours';
   const c=document.documentElement.cloneNode(true);
-  c.querySelector('#saved-data').textContent=JSON.stringify({title:S.title,days:S.days}).replace(/</g,'\\u003c');
+  c.querySelector('#saved-data').textContent=JSON.stringify({title:S.title,days:S.days,info:INFO}).replace(/</g,'\\u003c');
   c.querySelector('#days').innerHTML='';
   c.querySelector('#toast').className='toast';
   c.querySelector('#dirty').hidden=true;
@@ -331,7 +363,7 @@ document.getElementById('file').onchange=e=>{
     try{
       let txt=rd.result;
       if(/\.html?$/i.test(fl.name))txt=new DOMParser().parseFromString(txt,'text/html').getElementById('saved-data').textContent;
-      S=fromData(JSON.parse(txt));
+      const d=JSON.parse(txt);S=fromData(d);if(d.info){setInfo(d.info);saveInfo();showInfo()}
       document.getElementById('title').value=S.title;render();save();setDirty(false);toast('Opened '+fl.name);
     }catch(err){toast('That file could not be opened. Choose a job saved from this app.')}
   };
@@ -339,6 +371,8 @@ document.getElementById('file').onchange=e=>{
 };
 
 load();
+if(!INFO_SET)loadInfo();
+showInfo();
 document.getElementById('title').value=S.title||'';
 render();
 </script>
