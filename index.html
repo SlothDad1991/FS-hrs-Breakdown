@@ -44,7 +44,7 @@ main{display:grid;grid-template-columns:1fr 300px;gap:24px;align-items:start;pad
 .day[data-type=non]{--c:var(--non);--s:var(--non-soft)}
 .day[data-type=con]{--c:var(--con);--s:var(--con-soft)}
 .dh{display:grid;grid-template-columns:1fr auto;gap:12px;padding:14px 16px;background:var(--s)}
-.dh textarea{width:100%;resize:vertical;min-height:44px;border:1px solid transparent;background:transparent;border-radius:6px;padding:6px 8px;font-weight:600;font-size:15px}
+.dh textarea{overflow:hidden;width:100%;resize:vertical;min-height:44px;border:1px solid transparent;background:transparent;border-radius:6px;padding:6px 8px;font-weight:600;font-size:15px}
 .dh textarea:hover,.dh textarea:focus{background:var(--card);border-color:var(--line)}
 .meta{display:flex;gap:8px;align-items:center;margin-bottom:4px;flex-wrap:wrap}
 .meta b{font-size:13px;color:var(--mute);font-weight:600}
@@ -98,6 +98,7 @@ aside h2{margin:0 0 14px;font-size:15px;font-weight:500;color:#aab7c4}
 .note{font-size:12px;color:#8393a4;margin:12px 0 0}
 .leg{display:flex;gap:12px;flex-wrap:wrap;margin-top:16px;font-size:12px;color:#aab7c4}
 .leg i{display:inline-block;width:10px;height:10px;border-radius:2px;margin-right:5px}
+.tprint,.pdfdata{display:none}
 .dirty{color:#ff9a5c;font-size:13px;font-weight:600;align-self:center;margin-right:4px}
 .btn.danger{background:#d33;border-color:#d33;color:#fff;font-weight:600}
 dialog{border:1px solid var(--line);border-radius:12px;background:var(--card);color:var(--ink);padding:22px;width:min(360px,90vw)}
@@ -112,6 +113,10 @@ dialog p{margin:0 0 18px;font-size:15px}
 }
 @media print{
   .grip{display:none}
+  .top input{display:none}
+  .tprint{display:block;font-size:22px;font-weight:600;color:#000;overflow-wrap:anywhere}
+  .dl{width:280px}
+  .pdfdata{display:block;font-size:1px;line-height:1px;color:#fff;word-break:break-all;margin-top:6px;overflow:hidden}
   :root{--bg:#fff;--card:#fff;--ink:#000;--mute:#444;--line:#bbb;--field:#fff;--outage-soft:#fff8d6;--non-soft:#eceff2;--con-soft:#e1f2fc}
   body{-webkit-print-color-adjust:exact;print-color-adjust:exact}
   header{background:#fff;color:#000;border-bottom:2px solid #000}
@@ -135,13 +140,14 @@ dialog p{margin:0 0 18px;font-size:15px}
   <div class="wrap top">
     <div style="flex:1;min-width:260px">
       <h1>Field service breakdown hours</h1>
+      <div id="titlePrint" class="tprint"></div>
       <input id="title" autocomplete="off" aria-label="Job title and reference" placeholder="Job title, address and reference numbers">
     </div>
     <div class="actions">
       <span class="dirty" id="dirty" hidden>Unsaved changes</span>
       <button class="btn primary" id="save">Save to file</button>
       <button class="btn dark" id="open">Open file</button>
-      <input type="file" id="file" accept=".html,.htm,.fshb,.json" hidden>
+      <input type="file" id="file" accept=".html,.htm,.fshb,.json,.pdf" hidden>
       <button class="btn dark" id="copy">Copy summary</button>
       <button class="btn dark" id="print">Print</button>
       <button class="btn dark" id="pdf">Print to PDF</button>
@@ -176,6 +182,7 @@ dialog p{margin:0 0 18px;font-size:15px}
   </section>
   </div>
 </main>
+<div class="pdfdata" id="pdfdata" aria-hidden="true"></div>
 </div>
 <div class="toast" id="toast"></div>
 <dialog id="dlg" aria-labelledby="dmsg"><p id="dmsg"></p><div class="dbtn"><button class="btn" id="dno">Cancel</button><button class="btn danger" id="dyes">Delete</button></div></dialog>
@@ -253,7 +260,7 @@ function render(){
       <button class="link del" data-del="${d.id}">Delete day</button>
     </div>
   </article>`).join('')+`<button class="add" id="addDay">Add another day</button>`;
-  calc();showNotes();
+  calc();showNotes();document.querySelectorAll('[data-desc]').forEach(grow);
 }
 function calc(){
   let work=0,stand=0;
@@ -290,7 +297,7 @@ document.addEventListener('input',e=>{
   const t=e.target;
   if(t.dataset.k){if(parseFloat(t.value)<0)t.value='';const d=find(t.dataset.d);d.rows[t.dataset.k][t.dataset.i]=t.value;calc();save()}
   else if(t.dataset.label){find(t.dataset.label).label=t.value;save()}
-  else if(t.dataset.desc){find(t.dataset.desc).desc=t.value;save()}
+  else if(t.dataset.desc){find(t.dataset.desc).desc=t.value;grow(t);save()}
   else if(t.id==='title'){S.title=t.value;save()}
   else if(t.id==='notes'){S.notes=t.value;grow(t);save()}
   else if(t.id==='iname'){INFO.name=t.value;saveInfo();setDirty(true)}
@@ -357,6 +364,7 @@ document.getElementById('save').onclick=async()=>{
   c.querySelector('#days').innerHTML='';
   c.querySelector('#toast').className='toast';
   c.querySelector('#dirty').hidden=true;
+  c.querySelector('#pdfdata').textContent='';c.querySelector('#titlePrint').textContent='';
   const blob=new Blob(['<!DOCTYPE html>\n'+c.outerHTML],{type:'text/html'});
   if(window.showSaveFilePicker){
     try{
@@ -370,8 +378,49 @@ document.getElementById('save').onclick=async()=>{
   setDirty(false);toast('Saved '+name+'.html');
 };
 document.getElementById('open').onclick=()=>document.getElementById('file').click();
+const PDFJS='https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/';
+const loadScript=src=>new Promise((res,rej)=>{const t=document.createElement('script');t.src=src;t.onload=res;t.onerror=()=>rej(new Error('load'));document.head.appendChild(t)});
+async function pdfText(buf){
+  if(!window.pdfjsLib){await loadScript(PDFJS+'pdf.min.js');await loadScript(PDFJS+'pdf.worker.min.js')}
+  window.pdfjsLib.GlobalWorkerOptions.workerSrc=PDFJS+'pdf.worker.min.js';
+  const pdf=await window.pdfjsLib.getDocument({data:buf}).promise;
+  let out='';
+  for(let i=1;i<=pdf.numPages;i++){const c=await (await pdf.getPage(i)).getTextContent();out+=c.items.map(x=>x.str).join('')}
+  return out;
+}
+function b64u(str){
+  const b=new TextEncoder().encode(str);let bin='';
+  for(let i=0;i<b.length;i+=8192)bin+=String.fromCharCode.apply(null,b.subarray(i,i+8192));
+  return btoa(bin).replace(/\+/g,'-').replace(/\//g,'_').replace(/=+$/,'');
+}
+function fromPdfText(t){
+  const m=t.replace(/\s+/g,'').match(/FSHB1START([A-Za-z0-9_-]+?)FSHB1END/);
+  if(!m)return null;
+  let b=m[1].replace(/-/g,'+').replace(/_/g,'/');while(b.length%4)b+='=';
+  return JSON.parse(new TextDecoder().decode(Uint8Array.from(atob(b),c=>c.charCodeAt(0))));
+}
+function applyJob(d,name){
+  S=fromData(d);
+  if(d.info){setInfo(d.info);saveInfo();showInfo()}
+  document.getElementById('title').value=S.title;render();save();setDirty(false);toast('Opened '+name);
+}
+async function openPdf(fl){
+  toast('Reading PDF...');
+  try{
+    const d=fromPdfText(await pdfText(new Uint8Array(await fl.arrayBuffer())));
+    if(!d){toast('No job data found in that PDF. Only PDFs made by this app can be reopened.');return}
+    applyJob(d,fl.name);
+  }catch(err){toast('Could not read that PDF. It needs an internet connection the first time.')}
+}
+function syncPrint(){
+  document.getElementById('titlePrint').textContent=document.getElementById('title').value.trim();
+  document.getElementById('pdfdata').textContent='FSHB1START'+b64u(JSON.stringify({title:S.title,notes:S.notes||'',days:S.days,info:INFO}))+'FSHB1END';
+}
+window.addEventListener('beforeprint',syncPrint);
+window.addEventListener('afterprint',()=>{document.getElementById('pdfdata').textContent=''});
 document.getElementById('file').onchange=e=>{
   const fl=e.target.files[0];e.target.value='';if(!fl)return;
+  if(/\.pdf$/i.test(fl.name)||fl.type==='application/pdf'){openPdf(fl);return}
   const rd=new FileReader();
   rd.onload=()=>{
     try{
