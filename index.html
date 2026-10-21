@@ -61,6 +61,10 @@ td.lbl{font-weight:500;width:34%}
 td.lbl span{display:block;font-size:11px;color:var(--mute);font-weight:400}
 td input{width:100%;max-width:92px;margin-left:auto;display:block;text-align:right;background:var(--field);border:1px solid var(--line);border-radius:6px;padding:7px 8px;font-variant-numeric:tabular-nums}
 td input:focus{border-color:var(--con);outline:none;box-shadow:0 0 0 2px color-mix(in srgb,var(--con) 30%,transparent)}
+.grip{border:0;background:none;cursor:grab;color:var(--mute);padding:4px 6px;border-radius:6px;touch-action:none;display:inline-flex}
+.grip:hover{color:var(--ink);background:var(--card)}
+.day.dragging{position:relative;z-index:5;box-shadow:0 14px 34px rgba(0,0,0,.28);cursor:grabbing}
+body.dragging-body{user-select:none;-webkit-user-select:none;cursor:grabbing}
 .dl{width:130px;border:1px solid transparent;background:transparent;border-radius:6px;padding:3px 6px;font-size:14px;font-weight:700}
 .dl:hover,.dl:focus{background:var(--card);border-color:var(--line)}
 td.lbl .cp{display:block;margin-top:3px;background:none;border:1px solid var(--line);border-radius:5px;padding:1px 8px;font-size:11px;color:var(--mute);cursor:pointer}
@@ -106,6 +110,7 @@ dialog p{margin:0 0 18px;font-size:15px}
   .side{position:static;order:-1}
 }
 @media print{
+  .grip{display:none}
   :root{--bg:#fff;--card:#fff;--ink:#000;--mute:#444;--line:#bbb;--field:#fff;--outage-soft:#fff8d6;--non-soft:#eceff2;--con-soft:#e1f2fc}
   body{-webkit-print-color-adjust:exact;print-color-adjust:exact}
   header{background:#fff;color:#000;border-bottom:2px solid #000}
@@ -223,10 +228,10 @@ function rowHtml(d,r){
 function render(){
   const el=document.getElementById('days');
   el.innerHTML=S.days.map((d,ix)=>`
-  <article class="day" data-type="${d.type}">
+  <article class="day" data-id="${d.id}" data-type="${d.type}">
     <div class="dh">
       <div>
-        <div class="meta"><input class="dl" data-label="${d.id}" aria-label="Day name" value="${esc(d.label||'Day '+(ix+1))}" maxlength="40">
+        <div class="meta">${S.days.length>1?`<button class="grip" data-grip="${d.id}" title="Drag to reorder" aria-label="Reorder day. Drag, or use the up and down arrow keys"><svg width="12" height="18" viewBox="0 0 12 18" fill="currentColor" aria-hidden="true"><circle cx="3" cy="3" r="1.6"/><circle cx="9" cy="3" r="1.6"/><circle cx="3" cy="9" r="1.6"/><circle cx="9" cy="9" r="1.6"/><circle cx="3" cy="15" r="1.6"/><circle cx="9" cy="15" r="1.6"/></svg></button>`:''}<input class="dl" data-label="${d.id}" aria-label="Day name" value="${esc(d.label||'Day '+(ix+1))}" maxlength="40">
           ${d.type==='con'?'':`<select data-mode-for="${d.id}" aria-label="Work type">${Object.entries(MODES).map(([k,m])=>`<option value="${k}" ${k===d.mode?'selected':''}>${m.l}</option>`).join('')}</select>`}
           <select data-type-for="${d.id}" aria-label="Day type">${Object.entries(TYPES).map(([k,l])=>`<option value="${k}" ${k===d.type?'selected':''}>${l}</option>`).join('')}</select>
         </div>
@@ -370,6 +375,65 @@ document.getElementById('file').onchange=e=>{
   rd.readAsText(fl);
 };
 
+function moveDay(id,dir){
+  const i=S.days.findIndex(d=>d.id==id),j=i+dir;
+  if(i<0||j<0||j>=S.days.length)return;
+  [S.days[i],S.days[j]]=[S.days[j],S.days[i]];
+  render();save();
+  const g=document.querySelector(`[data-grip="${id}"]`);if(g)g.focus();
+}
+function startDrag(e,card){
+  const list=document.getElementById('days'),add=document.getElementById('addDay');
+  let y=e.clientY,startY=y,startS=window.scrollY,raf=0;
+  card.classList.add('dragging');document.body.classList.add('dragging-body');
+  const upd=()=>{
+    card.style.transform=`translateY(${y-startY+(window.scrollY-startS)}px)`;
+    const cr=card.getBoundingClientRect(),mid=cr.top+cr.height/2;
+    let before=null;
+    for(const o of list.querySelectorAll('.day')){
+      if(o===card)continue;
+      const r=o.getBoundingClientRect();
+      if(r.top+r.height/2>mid){before=o;break}
+    }
+    const target=before||add;
+    if(target!==card.nextElementSibling){
+      const t0=cr.top;
+      list.insertBefore(card,target);
+      startY+=card.getBoundingClientRect().top-t0;
+      card.style.transform=`translateY(${y-startY+(window.scrollY-startS)}px)`;
+    }
+  };
+  const tick=()=>{
+    const h=window.innerHeight,z=70;
+    if(y<z)window.scrollBy(0,-Math.ceil((z-y)/4));
+    else if(y>h-z)window.scrollBy(0,Math.ceil((y-(h-z))/4));
+    upd();raf=requestAnimationFrame(tick);
+  };
+  const mv=ev=>{y=ev.clientY};
+  const end=()=>{
+    cancelAnimationFrame(raf);
+    document.removeEventListener('pointermove',mv);
+    document.removeEventListener('pointerup',end);
+    document.removeEventListener('pointercancel',end);
+    document.body.classList.remove('dragging-body');
+    const ids=[...list.querySelectorAll('.day')].map(x=>x.dataset.id);
+    if(!ids.every((id,i)=>id==S.days[i].id)){S.days=ids.map(id=>S.days.find(d=>d.id==id));save()}
+    render();
+  };
+  document.addEventListener('pointermove',mv);
+  document.addEventListener('pointerup',end);
+  document.addEventListener('pointercancel',end);
+  raf=requestAnimationFrame(tick);
+}
+document.addEventListener('pointerdown',e=>{
+  const g=e.target.closest&&e.target.closest('[data-grip]');
+  if(!g||(e.pointerType==='mouse'&&e.button!==0))return;
+  e.preventDefault();startDrag(e,g.closest('.day'));
+});
+document.addEventListener('keydown',e=>{
+  const g=e.target.dataset&&e.target.dataset.grip;
+  if(g&&(e.key==='ArrowUp'||e.key==='ArrowDown')){e.preventDefault();moveDay(g,e.key==='ArrowUp'?-1:1)}
+});
 load();
 if(!INFO_SET)loadInfo();
 showInfo();
