@@ -85,6 +85,7 @@ aside h2{margin:0 0 14px;font-size:15px;font-weight:500;color:#aab7c4}
 .note{font-size:12px;color:#8393a4;margin:12px 0 0}
 .leg{display:flex;gap:12px;flex-wrap:wrap;margin-top:16px;font-size:12px;color:#aab7c4}
 .leg i{display:inline-block;width:10px;height:10px;border-radius:2px;margin-right:5px}
+.dirty{color:#f5c400;font-size:13px;font-weight:600;align-self:center;margin-right:4px}
 .btn.danger{background:#d33;border-color:#d33;color:#fff;font-weight:600}
 dialog{border:1px solid var(--line);border-radius:12px;background:var(--card);color:var(--ink);padding:22px;width:min(360px,90vw)}
 dialog::backdrop{background:rgba(10,15,21,.55)}
@@ -97,6 +98,11 @@ dialog p{margin:0 0 18px;font-size:15px}
   aside{position:static;order:-1}
 }
 @media print{
+  :root{--bg:#fff;--card:#fff;--ink:#000;--mute:#444;--line:#bbb;--field:#fff;--outage-soft:#fff8d6;--non-soft:#eceff2;--con-soft:#e1f2fc}
+  body{-webkit-print-color-adjust:exact;print-color-adjust:exact}
+  header{background:#fff;color:#000;border-bottom:2px solid #000}
+  .top h1{color:#444}
+  .top input{color:#000;border-color:#999}
   header .actions,.add,.df,.toast{display:none}
   body{background:#fff;color:#000}
   main{grid-template-columns:1fr}
@@ -114,11 +120,13 @@ dialog p{margin:0 0 18px;font-size:15px}
       <input id="title" autocomplete="off" aria-label="Job title and reference" placeholder="Job title, address and reference numbers">
     </div>
     <div class="actions">
+      <span class="dirty" id="dirty" hidden>Unsaved changes</span>
       <button class="btn primary" id="save">Save to file</button>
       <button class="btn dark" id="open">Open file</button>
       <input type="file" id="file" accept=".html,.htm,.fshb,.json" hidden>
       <button class="btn dark" id="copy">Copy summary</button>
       <button class="btn dark" id="print">Print</button>
+      <button class="btn dark" id="pdf">Print to PDF</button>
       <button class="btn dark" id="reset">Clear all</button>
     </div>
   </div>
@@ -156,7 +164,7 @@ const KEY='fshb.v1';
 let uid=1, S={title:'',days:[]};
 
 const blank=()=>({id:uid++,type:'outage',label:'',mode:'day',desc:'',rows:{prep:['','',''],stand:['','',''],day:['','',''],sleep:['','','']}});
-const n=v=>{const x=parseFloat(v);return isFinite(x)?x:0};
+const n=v=>{const x=parseFloat(v);return isFinite(x)&&x>0?x:0};
 const rt=r=>(n(r[0])+n(r[1]))*n(r[2]);
 const f=v=>{const r=Math.round(v*100)/100;return r.toLocaleString('en-AU',{maximumFractionDigits:2})};
 const esc=s=>String(s).replace(/[&<>"]/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]));
@@ -169,18 +177,19 @@ function fromData(d){
     ROWS.forEach(r=>{const v=(x.rows&&x.rows[r.k])||[];b.rows[r.k]=[0,1,2].map(i=>v[i]==null?'':String(v[i]))});return b});
   return {title:String(d.title||''),days};
 }
-let EMB=false;
+let EMB=false,DIRTY=false;
+function setDirty(v){DIRTY=v;const e=document.getElementById('dirty');if(e)e.hidden=!v}
 function load(){
   try{const e=document.getElementById('saved-data').textContent.trim();if(e){S=fromData(JSON.parse(e));EMB=true;return}}catch(e){}
   try{const d=JSON.parse(localStorage.getItem(KEY));if(d&&d.days){S=fromData(d)}}catch(e){}
   if(!S.days.length)S.days.push(blank());
 }
-function save(){if(EMB)return;try{localStorage.setItem(KEY,JSON.stringify(S))}catch(e){}}
+function save(){setDirty(true);if(EMB)return;try{localStorage.setItem(KEY,JSON.stringify(S))}catch(e){}}
 
 function rowHtml(d,r){
   const v=d.rows[r.k];
   return `<tr><td class="lbl">${r.l}${r.g==='stand'?`<button class="cp" data-copy="${d.id}" data-key="${r.k}" title="Copy the Work hours row's TSW, GSW and hours">Copy work hrs</button>`:''}</td>`+
-    [0,1,2].map(i=>`<td><input type="number" inputmode="decimal" min="0" step="any" aria-label="${r.l} ${['TSW','GSW','hours'][i]}" data-d="${d.id}" data-k="${r.k}" data-i="${i}" value="${esc(v[i])}"></td>`).join('')+
+    [0,1,2].map(i=>`<td><input type="number" inputmode="decimal" enterkeyhint="next" min="0" step="any" aria-label="${r.l} ${['TSW','GSW','hours'][i]}" data-d="${d.id}" data-k="${r.k}" data-i="${i}" value="${esc(v[i])}"></td>`).join('')+
     `<td class="tot" data-t="${d.id}-${r.k}">0</td></tr>`;
 }
 function render(){
@@ -239,7 +248,7 @@ const toast=m=>{const t=document.getElementById('toast');t.textContent=m;t.class
 
 document.addEventListener('input',e=>{
   const t=e.target;
-  if(t.dataset.k){const d=find(t.dataset.d);d.rows[t.dataset.k][t.dataset.i]=t.value;calc();save()}
+  if(t.dataset.k){if(parseFloat(t.value)<0)t.value='';const d=find(t.dataset.d);d.rows[t.dataset.k][t.dataset.i]=t.value;calc();save()}
   else if(t.dataset.label){find(t.dataset.label).label=t.value;save()}
   else if(t.dataset.desc){find(t.dataset.desc).desc=t.value;save()}
   else if(t.id==='title'){S.title=t.value;save()}
@@ -256,7 +265,27 @@ document.addEventListener('click',e=>{
   else if(ds.copy){const d=find(ds.copy);d.rows[ds.key]=[...d.rows.day];render();save()}
   else if(ds.del){ask('Delete this day and its hours?','Delete day').then(ok=>{if(!ok)return;S.days=S.days.filter(d=>d.id!=ds.del);if(!S.days.length)S.days.push(blank());render();save()})}
 });
-document.getElementById('print').onclick=()=>window.print();
+document.addEventListener('keydown',e=>{
+  const t=e.target;
+  if(!t.dataset||!t.dataset.k)return;
+  if(['-','+','e','E'].includes(e.key)){e.preventDefault();return}
+  if(e.key==='Enter'){
+    e.preventDefault();
+    const all=[...document.querySelectorAll('input[data-k]')],i=all.indexOf(t),nx=all[i+(e.shiftKey?-1:1)];
+    if(nx){nx.focus();nx.select()}else t.blur();
+  }
+});
+window.addEventListener('beforeunload',e=>{if(DIRTY){e.preventDefault();e.returnValue=''}});
+function doPrint(tip){
+  const old=document.title;
+  document.title=document.getElementById('title').value.trim()||'Field service hours';
+  const back=()=>{document.title=old;window.removeEventListener('afterprint',back)};
+  window.addEventListener('afterprint',back);
+  if(tip)toast("In the print window, set the printer to 'Save as PDF'");
+  setTimeout(()=>window.print(),tip?800:0);
+}
+document.getElementById('print').onclick=()=>doPrint(false);
+document.getElementById('pdf').onclick=()=>doPrint(true);
 document.getElementById('reset').onclick=()=>{
   ask('Clear the job title and every day? This cannot be undone.','Clear all').then(ok=>{if(!ok)return;S={title:'',days:[blank()]};document.getElementById('title').value='';render();save()});
 };
@@ -281,17 +310,18 @@ document.getElementById('save').onclick=async()=>{
   c.querySelector('#saved-data').textContent=JSON.stringify({title:S.title,days:S.days}).replace(/</g,'\\u003c');
   c.querySelector('#days').innerHTML='';
   c.querySelector('#toast').className='toast';
+  c.querySelector('#dirty').hidden=true;
   const blob=new Blob(['<!DOCTYPE html>\n'+c.outerHTML],{type:'text/html'});
   if(window.showSaveFilePicker){
     try{
       const h=await window.showSaveFilePicker({suggestedName:name+'.html',types:[{description:'Field service hours job',accept:{'text/html':['.html']}}]});
       const w=await h.createWritable();await w.write(blob);await w.close();
-      toast('Saved '+h.name);return;
+      setDirty(false);toast('Saved '+h.name);return;
     }catch(err){if(err&&err.name==='AbortError')return}
   }
   const a=document.createElement('a');a.href=URL.createObjectURL(blob);a.download=name+'.html';
   document.body.appendChild(a);a.click();a.remove();setTimeout(()=>URL.revokeObjectURL(a.href),1000);
-  toast('Saved '+name+'.html');
+  setDirty(false);toast('Saved '+name+'.html');
 };
 document.getElementById('open').onclick=()=>document.getElementById('file').click();
 document.getElementById('file').onchange=e=>{
@@ -302,7 +332,7 @@ document.getElementById('file').onchange=e=>{
       let txt=rd.result;
       if(/\.html?$/i.test(fl.name))txt=new DOMParser().parseFromString(txt,'text/html').getElementById('saved-data').textContent;
       S=fromData(JSON.parse(txt));
-      document.getElementById('title').value=S.title;render();save();toast('Opened '+fl.name);
+      document.getElementById('title').value=S.title;render();save();setDirty(false);toast('Opened '+fl.name);
     }catch(err){toast('That file could not be opened. Choose a job saved from this app.')}
   };
   rd.readAsText(fl);
