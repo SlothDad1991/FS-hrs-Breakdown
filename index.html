@@ -222,7 +222,7 @@ const ROWS=[
 const TYPES={outage:'Outage day',non:'Non outage',con:'Contractor work'};
 const MODES={prep:{l:'Prep',rows:['prep']},day:{l:'Day work',rows:['day']},night:{l:'Night work',rows:['stand','day','sleep']}};
 const vis=d=>(MODES[d.mode]||MODES.day).rows.map(k=>ROWS.find(r=>r.k===k));
-const VEHICLES=['EWP','Tipper','Crane','Light Vehicle','Light Trailer','Heavy Trailer'];
+const VEHICLES=['EWP','Tipper','Crane','Light Vehicle','Light Trailer','Heavy Trailer','Techmark'];
 const NOTYPE='No type selected';
 const vehType=t=>{t=String(t||'').slice(0,40);return t==='4X4'?'Light Vehicle':t};
 const KEY='fshb.v1';
