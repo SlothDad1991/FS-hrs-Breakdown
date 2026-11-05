@@ -76,6 +76,18 @@ tr.ot td.lbl{color:#b45309}
 .link{background:none;border:0;color:var(--mute);cursor:pointer;font-size:13px;padding:4px 2px;text-decoration:underline}
 .link:hover{color:var(--ink)}
 .link.del:hover{color:#d33}
+.vehs{padding:0 16px 12px}
+.vh{display:grid;grid-template-columns:minmax(0,1fr) 72px 92px 64px 28px;gap:8px;font-size:12px;color:var(--mute);font-weight:600;padding:4px 0 8px}
+.vh span:nth-child(n+2){text-align:right}
+.vh span:nth-child(2),.vh span:nth-child(3){padding-right:8px}
+.vl{text-align:right;font-weight:600;font-variant-numeric:tabular-nums}
+.vr{display:grid;grid-template-columns:minmax(0,1fr) 72px 92px 64px 28px;gap:8px;align-items:center;padding:4px 0;border-top:1px solid var(--line)}
+.vr select{width:100%;max-width:220px;border:1px solid var(--line);background:var(--card);border-radius:6px;padding:6px 8px}
+.vr input{width:100%;text-align:right;background:var(--field);border:1px solid var(--line);border-radius:6px;padding:7px 8px;font-variant-numeric:tabular-nums}
+.vr input:focus{border-color:var(--con);outline:none;box-shadow:0 0 0 2px color-mix(in srgb,var(--con) 30%,transparent)}
+.vrm{border:0;background:none;color:var(--mute);cursor:pointer;font-size:18px;line-height:1;padding:4px;border-radius:6px}
+.vrm:hover{color:#d33}
+.vadd{padding:5px 12px;font-size:13px}
 .add{border:2px dashed var(--line);background:transparent;border-radius:12px;padding:16px;cursor:pointer;font-weight:600;color:var(--mute);width:100%}
 .add:hover{border-color:var(--mute);color:var(--ink)}
 aside{background:var(--panel);color:var(--panel-ink);border-radius:14px;padding:20px}
@@ -88,6 +100,7 @@ aside{background:var(--panel);color:var(--panel-ink);border-radius:14px;padding:
 .info textarea{min-height:100px;resize:vertical;line-height:1.45;overflow:hidden;margin-top:6px}
 .info input,.info textarea{font:inherit;width:100%;background:#0e151d;border:1px solid #2b3744;color:#fff;border-radius:8px;padding:8px 10px;color-scheme:dark}
 .info input:focus,.info textarea:focus{border-color:var(--accent);outline:none}
+.vtot{margin-top:16px}
 aside h2{margin:0 0 14px;font-size:15px;font-weight:500;color:#aab7c4}
 .row{display:flex;justify-content:space-between;align-items:baseline;padding:10px 0;border-bottom:1px solid #2b3744;font-variant-numeric:tabular-nums}
 .row span{color:#c4cfda;font-size:14px}
@@ -107,12 +120,19 @@ dialog p{margin:0 0 18px;font-size:15px}
 .dbtn{display:flex;gap:8px;justify-content:flex-end}
 .toast{position:fixed;left:50%;bottom:22px;transform:translateX(-50%);background:#16202b;color:#fff;padding:10px 16px;border-radius:8px;font-size:14px;opacity:0;pointer-events:none;transition:opacity .2s;border:1px solid #3a4756}
 .toast.on{opacity:1}
+@media (max-width:560px){
+  .vh,.vr{grid-template-columns:1fr 1fr 64px 28px}
+  .vh span:first-child{display:none}
+  .vr select{grid-column:1/-1;max-width:none}
+}
 @media (max-width:860px){
   main{grid-template-columns:1fr}
   .side{position:static;order:-1}
 }
 @media print{
-  .grip{display:none}
+  .grip,.vrm{display:none}
+  .vh,.vr{grid-template-columns:minmax(0,1fr) 72px 92px 64px}
+  .vh span:last-child{display:none}
   .top input{display:none}
   .tprint{display:block;font-size:22px;font-weight:600;color:#000;overflow-wrap:anywhere}
   .dl{width:280px}
@@ -131,7 +151,7 @@ dialog p{margin:0 0 18px;font-size:15px}
   .info input,.info textarea{background:#fff;border:0;padding-left:0}
   .info .link{display:none}
   aside *{color:#000!important}
-  .day{break-inside:avoid}
+  .day,aside,.info{break-inside:avoid}
 }
 </style>
 </head>
@@ -169,6 +189,10 @@ dialog p{margin:0 0 18px;font-size:15px}
     <p class="note">Work hrs = prep and work hours total<br>Stand down hrs = stand down and sleeper total</p>
     <div class="leg"><span><i style="background:#f5c400"></i>Outage day</span><span><i style="background:#8a96a3"></i>Non outage</span><span><i style="background:#1f8fd1"></i>Contractor work</span></div>
   </aside>
+  <aside class="vtot" id="vTot" aria-label="Vehicle hours" hidden>
+    <h2>Vehicle hours</h2>
+    <div id="vRows"></div>
+  </aside>
   <section class="info" aria-label="Prepared by">
     <div class="ih"><h2>Prepared by</h2><button class="link" id="infoClear">Clear all</button></div>
     <label for="iname">Name</label>
@@ -198,12 +222,16 @@ const ROWS=[
 const TYPES={outage:'Outage day',non:'Non outage',con:'Contractor work'};
 const MODES={prep:{l:'Prep',rows:['prep']},day:{l:'Day work',rows:['day']},night:{l:'Night work',rows:['stand','day','sleep']}};
 const vis=d=>(MODES[d.mode]||MODES.day).rows.map(k=>ROWS.find(r=>r.k===k));
+const VEHICLES=['EWP','Tipper','Crane','Light Vehicle','Light Trailer','Heavy Trailer'];
+const NOTYPE='No type selected';
+const vehType=t=>{t=String(t||'').slice(0,40);return t==='4X4'?'Light Vehicle':t};
 const KEY='fshb.v1';
 let uid=1, S={title:'',days:[]};
 
-const blank=()=>({id:uid++,type:'outage',label:'',mode:'day',desc:'',rows:{prep:['','',''],stand:['','',''],day:['','',''],sleep:['','','']}});
+const blank=()=>({id:uid++,type:'outage',label:'',mode:'day',desc:'',rows:{prep:['','',''],stand:['','',''],day:['','',''],sleep:['','','']},vehicles:[]});
 const n=v=>{const x=parseFloat(v);return isFinite(x)&&x>0?x:0};
 const rt=r=>(n(r[0])+n(r[1]))*n(r[2]);
+const vrt=v=>n(v.qty)*n(v.hrs);
 const f=v=>{const r=Math.round(v*100)/100;return r.toLocaleString('en-AU',{maximumFractionDigits:2})};
 const esc=s=>String(s).replace(/[&<>"]/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]));
 
@@ -212,7 +240,8 @@ function fromData(d){
   const days=d.days.map(x=>{const b=blank();b.type=TYPES[x.type]?x.type:'outage';b.desc=String(x.desc||'');b.label=String(x.label||'');
     const rv=k=>x.rows&&x.rows[k]&&x.rows[k].some(v=>n(v)>0);
     b.mode=MODES[x.mode]?x.mode:(rv('stand')||rv('sleep')?'night':(rv('prep')&&!rv('day')?'prep':'day'));
-    ROWS.forEach(r=>{const v=(x.rows&&x.rows[r.k])||[];b.rows[r.k]=[0,1,2].map(i=>v[i]==null?'':String(v[i]))});return b});
+    ROWS.forEach(r=>{const v=(x.rows&&x.rows[r.k])||[];b.rows[r.k]=[0,1,2].map(i=>v[i]==null?'':String(v[i]))});
+    b.vehicles=(Array.isArray(x.vehicles)?x.vehicles:[]).map(v=>({type:vehType(v&&v.type),qty:v&&v.qty!=null?String(v.qty):'1',hrs:v&&v.hrs!=null?String(v.hrs):''}));return b});
   return {title:String(d.title||''),notes:String(d.notes||'').slice(0,5000),days};
 }
 const todayStr=()=>{const d=new Date();return d.getFullYear()+'-'+String(d.getMonth()+1).padStart(2,'0')+'-'+String(d.getDate()).padStart(2,'0')};
@@ -237,6 +266,16 @@ function rowHtml(d,r){
     [0,1,2].map(i=>`<td><input type="number" inputmode="decimal" enterkeyhint="next" min="0" step="any" aria-label="${r.l} ${['TSW','GSW','hours'][i]}" data-d="${d.id}" data-k="${r.k}" data-i="${i}" value="${esc(v[i])}"></td>`).join('')+
     `<td class="tot" data-t="${d.id}-${r.k}">0</td></tr>`;
 }
+function vehHtml(d){
+  if(d.type==='con'||!d.vehicles.length)return '';
+  return `<div class="vehs"><div class="vh"><span>Vehicle</span><span>No.</span><span>Hrs</span><span>Total</span><span></span></div>`+d.vehicles.map((v,i)=>{
+    const opts=['',...VEHICLES,...(!v.type||VEHICLES.includes(v.type)?[]:[v.type])];
+    return `<div class="vr"><select data-vt="${d.id}" data-vi="${i}" aria-label="Vehicle type">${opts.map(o=>`<option value="${esc(o)}" ${o===v.type?'selected':''}>${esc(o||'Select vehicle')}</option>`).join('')}</select>`+
+      `<input type="number" inputmode="numeric" enterkeyhint="next" min="0" step="1" aria-label="Number of ${esc(v.type||'vehicles')}" data-vq="${d.id}" data-vi="${i}" value="${esc(v.qty)}">`+
+      `<input type="number" inputmode="decimal" enterkeyhint="next" min="0" step="any" aria-label="${esc(v.type||'Vehicle')} hours" data-vh="${d.id}" data-vi="${i}" value="${esc(v.hrs)}">`+
+      `<div class="vl" data-vl="${d.id}-${i}">0</div>`+
+      `<button class="vrm" data-vrm="${d.id}" data-vi="${i}" title="Remove vehicle" aria-label="Remove ${esc(v.type||'vehicle')}">&times;</button></div>`}).join('')+`</div>`;
+}
 function render(){
   const el=document.getElementById('days');
   el.innerHTML=S.days.map((d,ix)=>`
@@ -255,17 +294,24 @@ function render(){
       <thead><tr><th>Work</th><th>TSW</th><th>GSW</th><th>Hrs</th><th>Total</th></tr></thead>
       <tbody>${vis(d).map(r=>rowHtml(d,r)).join('')}</tbody>
     </table></div>`}
+    ${vehHtml(d)}
     <div class="df">
-      <span></span>
+      ${d.type==='con'?'<span></span>':`<button class="btn vadd" data-addveh="${d.id}">Add vehicle</button>`}
       <button class="link del" data-del="${d.id}">Delete day</button>
     </div>
   </article>`).join('')+`<button class="add" id="addDay">Add another day</button>`;
   calc();showNotes();document.querySelectorAll('[data-desc]').forEach(grow);
 }
+function vehTotals(){
+  const t={};
+  S.days.forEach(d=>{if(d.type!=='con')d.vehicles.forEach(v=>{const k=v.type||NOTYPE;t[k]=(t[k]||0)+vrt(v)})});
+  return [...VEHICLES,...Object.keys(t).filter(k=>!VEHICLES.includes(k)&&k!==NOTYPE),NOTYPE].filter(k=>k===NOTYPE?t[k]>0:k in t).map(k=>[k,t[k]]);
+}
 function calc(){
   let work=0,stand=0;
   S.days.forEach(d=>{
     if(d.type==='con')return;
+    d.vehicles.forEach((v,i)=>{const c=document.querySelector(`[data-vl="${d.id}-${i}"]`);if(c)c.textContent=f(vrt(v))});
     let day=0;
     const list=vis(d).map(r=>[r,d.rows[r.k]]);
     list.forEach(([r,v])=>{
@@ -277,6 +323,9 @@ function calc(){
   });
   const tot=work+stand;
   sWork.textContent=f(work);sStand.textContent=f(stand);sTotal.textContent=f(tot);sPlus.textContent=f(tot*1.1);
+  const vt=vehTotals();
+  document.getElementById('vTot').hidden=!vt.length;
+  document.getElementById('vRows').innerHTML=vt.map(([k,h])=>`<div class="row"><span>${esc(k)}</span><b>${f(h)}</b></div>`).join('');
   return {work,stand,tot,plus:tot*1.1};
 }
 function ask(msg,ok){
@@ -296,6 +345,8 @@ const toast=m=>{const t=document.getElementById('toast');t.textContent=m;t.class
 document.addEventListener('input',e=>{
   const t=e.target;
   if(t.dataset.k){if(parseFloat(t.value)<0)t.value='';const d=find(t.dataset.d);d.rows[t.dataset.k][t.dataset.i]=t.value;calc();save()}
+  else if(t.dataset.vq){if(parseFloat(t.value)<0)t.value='';find(t.dataset.vq).vehicles[t.dataset.vi].qty=t.value;calc();save()}
+  else if(t.dataset.vh){if(parseFloat(t.value)<0)t.value='';find(t.dataset.vh).vehicles[t.dataset.vi].hrs=t.value;calc();save()}
   else if(t.dataset.label){find(t.dataset.label).label=t.value;save()}
   else if(t.dataset.desc){find(t.dataset.desc).desc=t.value;grow(t);save()}
   else if(t.id==='title'){S.title=t.value;save()}
@@ -304,6 +355,7 @@ document.addEventListener('input',e=>{
   else if(t.id==='idate'){INFO.date=t.value;INFO.manual=!!t.value;saveInfo();setDirty(true)}
 });
 document.addEventListener('change',e=>{
+  if(e.target.dataset.vt){const v=find(e.target.dataset.vt).vehicles[e.target.dataset.vi];const{vt,vi}=e.target.dataset;v.type=e.target.value;render();save();const g=document.querySelector(`[data-vt="${vt}"][data-vi="${vi}"]`);if(g)g.focus();return}
   const mid=e.target.dataset.modeFor;
   if(mid){const d=find(mid);d.mode=e.target.value;if(d.mode==='prep')d.type='non';render();save();return}
   const id=e.target.dataset.typeFor;
@@ -312,16 +364,19 @@ document.addEventListener('change',e=>{
 document.addEventListener('click',e=>{
   const t=e.target, ds=t.dataset;
   if(t.id==='addDay'){S.days.push(blank());render();save()}
+  else if(ds.addveh){const d=find(ds.addveh);d.vehicles.push({type:'',qty:'1',hrs:''});render();save();
+    const a=document.querySelectorAll(`[data-vt="${d.id}"]`);if(a.length)a[a.length-1].focus()}
+  else if(ds.vrm){find(ds.vrm).vehicles.splice(+ds.vi,1);render();save()}
   else if(ds.copy){const d=find(ds.copy);d.rows[ds.key]=[...d.rows.day];render();save()}
   else if(ds.del){ask('Delete this day and its hours?','Delete day').then(ok=>{if(!ok)return;S.days=S.days.filter(d=>d.id!=ds.del);if(!S.days.length)S.days.push(blank());render();save()})}
 });
 document.addEventListener('keydown',e=>{
   const t=e.target;
-  if(!t.dataset||!t.dataset.k)return;
+  if(!t.dataset||(!t.dataset.k&&!t.dataset.vh&&!t.dataset.vq))return;
   if(['-','+','e','E'].includes(e.key)){e.preventDefault();return}
   if(e.key==='Enter'){
     e.preventDefault();
-    const all=[...document.querySelectorAll('input[data-k]')],i=all.indexOf(t),nx=all[i+(e.shiftKey?-1:1)];
+    const all=[...document.querySelectorAll('input[data-k],input[data-vq],input[data-vh]')],i=all.indexOf(t),nx=all[i+(e.shiftKey?-1:1)];
     if(nx){nx.focus();nx.select()}else t.blur();
   }
 });
@@ -348,9 +403,13 @@ document.getElementById('copy').onclick=()=>{
     const rows=vis(d).map(x=>[x,d.rows[x.k]]);
     out+=`${d.label||'Day '+(i+1)} (${MODES[d.mode].l}, ${TYPES[d.type]})${d.desc?': '+d.desc:''}\n`;
     rows.forEach(([x,v])=>{out+=`  ${x.l}: ${n(v[0])} TSW + ${n(v[1])} GSW x ${n(v[2])} hrs = ${f(rt(v))}\n`});
-    out+=`  Total day: ${f(rows.reduce((a,[,v])=>a+rt(v),0))}\n\n`;
+    out+=`  Total day: ${f(rows.reduce((a,[,v])=>a+rt(v),0))}\n`;
+    d.vehicles.forEach(v=>{out+=`  ${v.type||NOTYPE}: ${n(v.qty)} x ${n(v.hrs)} hrs = ${f(vrt(v))}\n`});
+    out+='\n';
   });
   out+=`Work hrs: ${f(r.work)}\nStand down hrs: ${f(r.stand)}\nTotal: ${f(r.tot)}\nPlus 10%: ${f(r.plus)}`;
+  const vt=vehTotals();
+  if(vt.length)out+='\n\nVehicle hours:\n'+vt.map(([k,h])=>`  ${k}: ${f(h)}`).join('\n');
   if((S.notes||'').trim())out+=`\n\nNotes:\n${S.notes.trim()}`;
   if(INFO.name||INFO.date)out+=`\n\nPrepared by: ${INFO.name}${INFO.date?'  Date: '+INFO.date.split('-').reverse().join('/'):''}`;
   (navigator.clipboard?navigator.clipboard.writeText(out):Promise.reject()).then(()=>toast('Summary copied'),()=>toast('Copy not available in this browser'));
