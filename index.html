@@ -53,13 +53,13 @@ main{display:grid;grid-template-columns:1fr 300px;gap:24px;align-items:start;pad
 .dt small{display:block;color:var(--mute);font-size:12px}
 .dt strong{font-size:30px;font-weight:700;font-variant-numeric:tabular-nums;line-height:1.1}
 .grid{padding:6px 16px 14px;overflow-x:auto}
-table{width:100%;border-collapse:collapse;min-width:430px}
+table{width:100%;border-collapse:collapse;min-width:500px}
 th{font-size:12px;color:var(--mute);font-weight:600;text-align:right;padding:8px 6px}
 th:first-child,td:first-child{text-align:left}
 td{padding:4px 6px;border-top:1px solid var(--line)}
-td.lbl{font-weight:500;width:34%}
+td.lbl{font-weight:500;width:26%}
 td.lbl span{display:block;font-size:11px;color:var(--mute);font-weight:400}
-td input{width:100%;max-width:92px;margin-left:auto;display:block;text-align:right;background:var(--field);border:1px solid var(--line);border-radius:6px;padding:7px 8px;font-variant-numeric:tabular-nums}
+td input{width:100%;max-width:80px;margin-left:auto;display:block;text-align:right;background:var(--field);border:1px solid var(--line);border-radius:6px;padding:7px 8px;font-variant-numeric:tabular-nums}
 td input:focus{border-color:var(--con);outline:none;box-shadow:0 0 0 2px color-mix(in srgb,var(--con) 30%,transparent)}
 .grip{border:0;background:none;cursor:grab;color:var(--mute);padding:4px 6px;border-radius:6px;touch-action:none;display:inline-flex}
 .grip:hover{color:var(--ink);background:var(--card)}
@@ -228,9 +228,9 @@ const vehType=t=>{t=String(t||'').slice(0,40);return t==='4X4'?'Light Vehicle':t
 const KEY='fshb.v1';
 let uid=1, S={title:'',days:[]};
 
-const blank=()=>({id:uid++,type:'outage',label:'',mode:'day',desc:'',rows:{prep:['','',''],stand:['','',''],day:['','',''],sleep:['','','']},vehicles:[]});
+const blank=()=>({id:uid++,type:'outage',label:'',mode:'day',desc:'',rows:{prep:['','','',''],stand:['','','',''],day:['','','',''],sleep:['','','','']},vehicles:[]});
 const n=v=>{const x=parseFloat(v);return isFinite(x)&&x>0?x:0};
-const rt=r=>(n(r[0])+n(r[1]))*n(r[2]);
+const rt=r=>n(r[0])*n(r[2])+n(r[1])*n(r[3]);
 const vrt=v=>n(v.qty)*n(v.hrs);
 const f=v=>{const r=Math.round(v*100)/100;return r.toLocaleString('en-AU',{maximumFractionDigits:2})};
 const esc=s=>String(s).replace(/[&<>"]/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]));
@@ -240,7 +240,8 @@ function fromData(d){
   const days=d.days.map(x=>{const b=blank();b.type=TYPES[x.type]?x.type:'outage';b.desc=String(x.desc||'');b.label=String(x.label||'');
     const rv=k=>x.rows&&x.rows[k]&&x.rows[k].some(v=>n(v)>0);
     b.mode=MODES[x.mode]?x.mode:(rv('stand')||rv('sleep')?'night':(rv('prep')&&!rv('day')?'prep':'day'));
-    ROWS.forEach(r=>{const v=(x.rows&&x.rows[r.k])||[];b.rows[r.k]=[0,1,2].map(i=>v[i]==null?'':String(v[i]))});
+    ROWS.forEach(r=>{const v=(x.rows&&x.rows[r.k])||[];b.rows[r.k]=[0,1,2,3].map(i=>v[i]==null?'':String(v[i]));
+      if(v.length<4&&n(v[1])>0)b.rows[r.k][3]=b.rows[r.k][2]});
     b.vehicles=(Array.isArray(x.vehicles)?x.vehicles:[]).map(v=>({type:vehType(v&&v.type),qty:v&&v.qty!=null?String(v.qty):'1',hrs:v&&v.hrs!=null?String(v.hrs):''}));return b});
   return {title:String(d.title||''),notes:String(d.notes||'').slice(0,5000),days};
 }
@@ -262,8 +263,8 @@ function save(){setDirty(true);if(EMB)return;try{localStorage.setItem(KEY,JSON.s
 
 function rowHtml(d,r){
   const v=d.rows[r.k];
-  return `<tr><td class="lbl">${r.l}${r.g==='stand'?`<button class="cp" data-copy="${d.id}" data-key="${r.k}" title="Copy the Work hours row's TSW, GSW and hours">Copy work hrs</button>`:''}</td>`+
-    [0,1,2].map(i=>`<td><input type="number" inputmode="decimal" enterkeyhint="next" min="0" step="any" aria-label="${r.l} ${['TSW','GSW','hours'][i]}" data-d="${d.id}" data-k="${r.k}" data-i="${i}" value="${esc(v[i])}"></td>`).join('')+
+  return `<tr><td class="lbl">${r.l}${r.g==='stand'?`<button class="cp" data-copy="${d.id}" data-key="${r.k}" title="Copy the Work hours row's TSW, GSW and their hours">Copy work hrs</button>`:''}</td>`+
+    [0,2,1,3].map(i=>`<td><input type="number" inputmode="decimal" enterkeyhint="next" min="0" step="any" aria-label="${r.l} ${['TSW','GSW','TSW hours','GSW hours'][i]}" data-d="${d.id}" data-k="${r.k}" data-i="${i}" value="${esc(v[i])}"></td>`).join('')+
     `<td class="tot" data-t="${d.id}-${r.k}">0</td></tr>`;
 }
 function vehHtml(d){
@@ -291,7 +292,7 @@ function render(){
       ${d.type==='con'?'':`<div class="dt"><small>Total day</small><strong data-day="${d.id}">0</strong></div>`}
     </div>
     ${d.type==='con'?'':`<div class="grid"><table>
-      <thead><tr><th>Work</th><th>TSW</th><th>GSW</th><th>Hrs</th><th>Total</th></tr></thead>
+      <thead><tr><th>Work</th><th>TSW</th><th>TSW hrs</th><th>GSW</th><th>GSW hrs</th><th>Total</th></tr></thead>
       <tbody>${vis(d).map(r=>rowHtml(d,r)).join('')}</tbody>
     </table></div>`}
     ${vehHtml(d)}
@@ -402,7 +403,7 @@ document.getElementById('copy').onclick=()=>{
     if(d.type==='con'){out+=`${d.label||'Day '+(i+1)} (${TYPES.con})${d.desc?': '+d.desc:''}\n\n`;return}
     const rows=vis(d).map(x=>[x,d.rows[x.k]]);
     out+=`${d.label||'Day '+(i+1)} (${MODES[d.mode].l}, ${TYPES[d.type]})${d.desc?': '+d.desc:''}\n`;
-    rows.forEach(([x,v])=>{out+=`  ${x.l}: ${n(v[0])} TSW + ${n(v[1])} GSW x ${n(v[2])} hrs = ${f(rt(v))}\n`});
+    rows.forEach(([x,v])=>{out+=`  ${x.l}: ${n(v[0])} TSW x ${n(v[2])} hrs + ${n(v[1])} GSW x ${n(v[3])} hrs = ${f(rt(v))}\n`});
     out+=`  Total day: ${f(rows.reduce((a,[,v])=>a+rt(v),0))}\n`;
     d.vehicles.forEach(v=>{out+=`  ${v.type||NOTYPE}: ${n(v.qty)} x ${n(v.hrs)} hrs = ${f(vrt(v))}\n`});
     out+='\n';
